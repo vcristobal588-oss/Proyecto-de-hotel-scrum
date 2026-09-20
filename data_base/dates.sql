@@ -1,4 +1,3 @@
--- Crear la base de datos
 CREATE DATABASE IF NOT EXISTS hotel_duerme_bien;
 USE hotel_duerme_bien;
 
