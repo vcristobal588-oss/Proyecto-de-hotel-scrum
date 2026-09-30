@@ -1,42 +1,56 @@
+import getpass
+
+import bcrypt
 import mysql.connector
 
-def iniciar_sesion():
-    print("--- HOTEL DUERME BIEN: SISTEMA DE LOGIN ---")
-    email_ingresado = input("Ingresa tu correo: ")
-    password_ingresada = input("Ingresa tu contraseña: ")
+from database import obtener_conexion
 
+
+def hashear_password(password: str) -> str:
+    """Genera el hash bcrypt (con salt incluido) listo para guardar en la BD."""
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verificar_password(password: str, hash_guardado: str) -> bool:
+    """Compara la contraseña ingresada contra el hash almacenado."""
     try:
-        conexion = mysql.connector.connect(
-            host="localhost",
-            user="root",          
-            password="",          
-            database="hotel_duerme_bien"
-        )
-        
-        cursor = conexion.cursor(dictionary=True)
+        return bcrypt.checkpw(password.encode("utf-8"), hash_guardado.encode("utf-8"))
+    except ValueError:
+        # El valor guardado no es un hash bcrypt válido (p. ej. texto plano antiguo)
+        return False
 
-        consulta = "SELECT * FROM usuarios WHERE email = %s"
-        cursor.execute(consulta, (email_ingresado,))
+
+def iniciar_sesion():
+    print("\n--- INICIO DE SESIÓN: HOTEL DUERME BIEN ---")
+    email = input("Ingrese su correo electrónico: ").strip()
+    password = getpass.getpass("Ingrese su contraseña: ")
+
+    conexion = None
+    cursor = None
+    try:
+        conexion = obtener_conexion()
+        cursor = conexion.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM usuarios WHERE email = %s", (email,))
         usuario = cursor.fetchone()
 
-        if usuario:
-            if usuario['password'] == password_ingresada:
-                print(f"\n¡Bienvenido/a, {usuario['nombre']}!")
-                
-                if usuario['rol'] == 'administrador':
-                    print("-> Acceso concedido: Perfil de ADMINISTRADOR (Control total del sistema).")
-                elif usuario['rol'] == 'encargado':
-                    print("-> Acceso concedido: Perfil de ENCARGADO (Gestión de habitaciones y check-in).")
-            else:
-                print("\nError: Contraseña incorrecta.")
-        else:
-            print("\nError: El correo no está registrado en el sistema.")
+        # Mensaje único para no revelar si el correo existe o no
+        if usuario and verificar_password(password, usuario["password"]):
+            print(f"\n¡Bienvenido, {usuario['nombre']}!")
+            print(f"Rol asignado en el sistema: {usuario['rol'].upper()}")
+            return usuario
 
-        cursor.close()
-        conexion.close()
+        print("\nError: Correo o contraseña incorrectos.")
 
     except mysql.connector.Error as error:
-        print(f"Error al conectar con la base de datos: {error}")
+        print(f"\nError de conexión a la base de datos: {error}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conexion:
+            conexion.close()
+
+    return None
+
 
 if __name__ == "__main__":
     iniciar_sesion()
